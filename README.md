@@ -1,33 +1,51 @@
 # IS 436 Group Project - Basic Chat Application
 
 ## Team Members
-- Fitzgerald
+- Fitzgerald Afari-Minta
 - Noel
 - KJ
 - Brandon
 - Shamar
 
 ## Project Description
-This project is a basic text-based chat application built in Python using built-in libraries only. It includes a chat server and a chat client that communicate through TCP socket programming.
+This project is a basic text-based chat application built in Python using built-in libraries only. It includes a chat server and a chat client that communicate using TCP socket programming.
+
+## Project Type
+Option 1 - Chat Application
+
+## Development Methodology
+Parallel Development
 
 ## Core Features
 - Server accepts a TCP port as a command-line argument
+- Server validates the port number
 - Client connects to the server using a TCP port
-- Welcome message on connection
+- Server sends a welcome message
 - Text-based messaging between server and client
-- Graceful exit using a keyword such as "exit"
+- Graceful exit using the keyword "exit"
 
 ## Possible Bonus Features
 - Timestamps
 - Chat logging
-- Multiple clients
 - Chat IDs
+- Multiple clients
+
+## Current Progress
+- Google Drive created and shared
+- GitHub repository created and shared
+- Team setup document completed
+- Functional requirements drafted
+- Non-functional requirements drafted
+- Use case and DFD drafts in progress
 
 ## Repository Structure
-- `server.py` - chat server
-- `client.py` - chat client
+- `src/` - Python source files
 - `docs/` - project documents and notes
-- `diagrams/` - DFD, ERD, and use case diagrams
+- `diagrams/` - use case diagram, DFDs, and ERD
+
+## Planned Source Files
+- `src/server.py`
+- `src/client.py`
 
 ## Notes
 This repository is for the IS 436 group project.
