@@ -80,15 +80,30 @@ def log_message(message):
 
 def get_timestamp():
     """
-    Returns the current time as a formatted string like "[14:05:32]".
+    Returns the current date AND time as a formatted string.
+    Example output: [2026-05-06 02:35:10 PM]
+
+    Changes from original:
+        - Added date (%Y-%m-%d) so logs show WHEN a conversation happened
+        - Switched from 24-hour (%H) to 12-hour (%I) format with AM/PM (%p)
+          so timestamps are easier to read at a glance
 
     This is the "Timestamps" bonus feature — every message shows when it was sent.
 
+    strftime() format codes used:
+        %Y  = 4-digit year         (e.g. 2026)
+        %m  = month as number      (e.g. 05 for May)
+        %d  = day of month         (e.g. 06)
+        %I  = hour in 12-hr format (e.g. 02)
+        %M  = minutes              (e.g. 35)
+        %S  = seconds              (e.g. 10)
+        %p  = AM or PM             (e.g. PM)
+
     Returns:
-        str: Current time formatted as [HH:MM:SS]
+        str: Current date and time formatted as [YYYY-MM-DD HH:MM:SS AM/PM]
     """
-    now = datetime.datetime.now()          # Get the current date and time
-    return now.strftime("[%H:%M:%S]")      # Format it as hours:minutes:seconds
+    now = datetime.datetime.now()               # Get the current date and time
+    return now.strftime("[%Y-%m-%d %I:%M:%S %p]")  # Format with date + 12-hour time
 
 
 # ─────────────────────────────────────────────
@@ -264,8 +279,49 @@ def start_server(port):
     print(f"  IS 436 Chat Server started on port {port}")
     print(f"  Chat log will be saved to: {os.path.abspath(LOG_FILE)}")
     print(f"  Waiting for clients to connect...")
+    print(f"  Type a message and press Enter to broadcast to all clients.")
     print(f"  Press Ctrl+C to shut down the server.")
     print(f"{'='*50}\n")
+
+    # ── Server input thread ────────────────────────────────────────────────────
+    # This thread lets the SERVER ADMIN type messages and broadcast them to
+    # all connected clients. Without this, the server could only receive.
+    #
+    # We put this in a thread because the main thread is busy running accept()
+    # in a loop waiting for new connections — it can't also wait for keyboard
+    # input at the same time. So we give keyboard input its own thread.
+    def server_input_loop():
+        """
+        Runs in a background thread — reads keyboard input from the server
+        terminal and broadcasts it to all connected clients as [SERVER HOST].
+        """
+        while True:
+            try:
+                # Wait for the server admin to type something and press Enter
+                message_text = input()
+
+                # Ignore empty input (just pressing Enter)
+                if not message_text.strip():
+                    continue
+
+                # Format it clearly so clients know it came from the server host
+                formatted = f"{get_timestamp()} [SERVER HOST]: {message_text}"
+
+                # Log it locally on the server console
+                log_message(formatted)
+
+                # Send it to every connected client
+                broadcast(formatted, sender_socket=None)
+
+            except EOFError:
+                # EOFError happens when the input stream closes (e.g. Ctrl+C)
+                break
+            except Exception:
+                break
+
+    # Start the server input thread as a daemon so it closes with the program
+    input_thread = threading.Thread(target=server_input_loop, daemon=True)
+    input_thread.start()
 
     # ── Main accept loop ───────────────────────────────────────────────────────
     # This loop runs forever, waiting for new clients to connect

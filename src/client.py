@@ -115,11 +115,14 @@ def receive_messages(client_socket):
 # CORE FUNCTION: start_client
 # ─────────────────────────────────────────────
 
-def start_client(port):
+def start_client(host, port):
     """
     Connects to the chat server and starts the send/receive loop.
 
     Parameters:
+        host (str): The IP address of the server to connect to
+                    "127.0.0.1" = same machine
+                    "192.168.x.x" = another device on the same WiFi network
         port (int): The TCP port number the server is listening on
     """
 
@@ -129,10 +132,9 @@ def start_client(port):
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     # ── Connect to the server ──────────────────────────────────────────────────
-    # "127.0.0.1" is the "loopback" address — it always means "this same machine".
-    # If the server is on a different computer, you'd use its IP address instead.
-    # We're using localhost for testing (both server and client on same machine).
-    server_address = ("127.0.0.1", port)
+    # host is either "127.0.0.1" (same machine) or an IP like "192.168.1.45"
+    # port is the number the server is listening on
+    server_address = (host, port)
 
     try:
         print(f"[CLIENT] Connecting to server at {server_address[0]}:{server_address[1]}...")
@@ -217,22 +219,39 @@ def start_client(port):
 
 if __name__ == "__main__":
     """
-    sys.argv example:
-        Command:   python client.py 5000
-        sys.argv:  ["client.py", "5000"]
+    sys.argv examples:
+        Same machine:     python client.py 5000
+          sys.argv:       ["client.py", "5000"]
+
+        Different device: python client.py 192.168.1.45 5000
+          sys.argv:       ["client.py", "192.168.1.45", "5000"]
     """
 
-    # Validate that the user provided exactly one argument (the port number)
-    if len(sys.argv) != 2:
-        print("Usage: python client.py <port>")
-        print("Example: python client.py 5000")
+    # Accept either 1 argument (port only) or 2 arguments (ip + port)
+    if len(sys.argv) == 2:
+        # No IP provided — assume same machine (localhost)
+        server_host = "127.0.0.1"
+        port_arg = sys.argv[1]
+
+    elif len(sys.argv) == 3:
+        # IP address provided — connecting to a different device
+        server_host = sys.argv[1]
+        port_arg = sys.argv[2]
+
+    else:
+        print("Usage:")
+        print("  Same machine:      python client.py <port>")
+        print("  Different device:  python client.py <server-ip> <port>")
+        print("Examples:")
+        print("  python client.py 5000")
+        print("  python client.py 192.168.1.45 5000")
         sys.exit(1)
 
-    # Try converting the argument to an integer
+    # Try converting the port argument to an integer
     try:
-        port_number = int(sys.argv[1])
+        port_number = int(port_arg)
     except ValueError:
-        print(f"Error: '{sys.argv[1]}' is not a valid port number. Please enter an integer.")
+        print(f"Error: '{port_arg}' is not a valid port number. Please enter an integer.")
         sys.exit(1)
 
     # Validate the port is in the allowed range (matching the server's requirement)
@@ -241,4 +260,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Everything looks good — connect to the server!
-    start_client(port_number)
+    start_client(server_host, port_number)
