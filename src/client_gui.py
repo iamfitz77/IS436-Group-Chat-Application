@@ -337,9 +337,30 @@ class ClientGUI:
         )
         self.status_label.pack(side=tk.RIGHT, pady=12)
 
+        # ── INPUT BAR (bottom) ─────────────────────────────────────────────────
+        # CRITICAL PACKING ORDER:
+        #   The chat area uses expand=True to fill all remaining space.
+        #   If we pack the chat area FIRST, it takes everything and leaves no room
+        #   for the input bar — it disappears off the bottom of the window.
+        #   SOLUTION: Pack the input bar FIRST so it claims its space at the bottom,
+        #   THEN pack the chat area to fill whatever is left over.
+
+        input_frame = tk.Frame(
+            self.root,
+            bg=COLORS["bg_medium"],
+            pady=12,
+            padx=15
+        )
+        input_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        # 1px gray line separating the chat area from the input bar
+        tk.Frame(self.root, bg=COLORS["border"], height=1).pack(fill=tk.X, side=tk.BOTTOM)
+
         # ── CHAT AREA ──────────────────────────────────────────────────────────
-        # ScrolledText: a multi-line read-only text display with a scrollbar.
-        # state=tk.DISABLED = read-only. We unlock it briefly to insert messages.
+        # Packed AFTER the input bar so it only fills the remaining space.
+        # ScrolledText: a multi-line read-only text display with a built-in scrollbar.
+        # state=tk.DISABLED = read-only. We unlock it briefly to insert messages,
+        # then lock it again so users cannot edit the chat history.
         self.chat_area = scrolledtext.ScrolledText(
             self.root,
             state=tk.DISABLED,          # Read-only
@@ -357,7 +378,7 @@ class ClientGUI:
 
         # ── TEXT TAGS ─────────────────────────────────────────────────────────
         # Tags apply specific styles to specific pieces of inserted text.
-        # Think of them as inline CSS classes.
+        # Think of them as inline CSS classes — define once, apply by name.
 
         # Small gray text for timestamps shown next to each message
         self.chat_area.tag_configure("timestamp",
@@ -373,8 +394,8 @@ class ClientGUI:
         self.chat_area.tag_configure("self_msg",
             foreground=COLORS["text_primary"],
             font=self.font_message,
-            lmargin1=20,    # Indent first line 20px from left
-            lmargin2=20)    # Keep wrapped lines indented too
+            lmargin1=20,
+            lmargin2=20)
 
         # Bold orange label for messages from the SERVER HOST admin
         self.chat_area.tag_configure("server_name",
@@ -394,22 +415,6 @@ class ClientGUI:
             foreground=COLORS["text_system"],
             font=tkfont.Font(family="Consolas", size=10, slant="italic"),
             justify=tk.CENTER)
-
-        # ── INPUT BAR (bottom) ─────────────────────────────────────────────────
-        # Pack order matters when using side=BOTTOM:
-        # The LAST item packed ends up at the very bottom.
-        # So we pack input_frame first, then the 1px separator.
-
-        input_frame = tk.Frame(
-            self.root,
-            bg=COLORS["bg_medium"],
-            pady=12,
-            padx=15
-        )
-        input_frame.pack(fill=tk.X, side=tk.BOTTOM)
-
-        # 1px gray line separating the chat area from the input bar
-        tk.Frame(self.root, bg=COLORS["border"], height=1).pack(fill=tk.X, side=tk.BOTTOM)
 
         # Single-line text entry box for typing messages
         # state=tk.DISABLED = locked until we successfully connect to the server

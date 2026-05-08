@@ -420,10 +420,78 @@ class ServerGUI:
         )
         self.port_label.pack(side=tk.RIGHT, pady=12)
 
+        # ── INPUT BAR (bottom of the window) ──────────────────────────────────
+        # CRITICAL PACKING ORDER:
+        #   Tkinter's pack() allocates space in the ORDER widgets are packed.
+        #   The content frame uses expand=True to fill ALL remaining space.
+        #   If we pack the content frame first, it takes everything and leaves
+        #   no room for the input bar — it disappears off the bottom of the window.
+        #
+        #   SOLUTION: Pack the input bar FIRST (it claims its space at the bottom),
+        #   THEN pack the content frame (it fills whatever space is left over).
+        #
+        #   Order we pack with side=BOTTOM (first packed = closest to bottom):
+        #       1. input_frame  -> sits at the very bottom
+        #       2. separator    -> sits just above the input frame
+
+        input_frame = tk.Frame(
+            self.root,
+            bg=COLORS["bg_medium"],
+            pady=12,   # 12px top and bottom internal padding
+            padx=15    # 15px left and right internal padding
+        )
+        input_frame.pack(fill=tk.X, side=tk.BOTTOM)
+
+        # 1px gray separator line between the chat area and the input bar
+        tk.Frame(self.root, bg=COLORS["border"], height=1).pack(fill=tk.X, side=tk.BOTTOM)
+
+        # Single-line text input field where the server admin types messages.
+        # Saved as self.input_box so _send_message() and focus_force() can access it.
+        self.input_box = tk.Entry(
+            input_frame,
+            font=self.font_input,
+            bg=COLORS["bg_light"],
+            fg=COLORS["text_primary"],
+            insertbackground=COLORS["accent_orange"],  # blinking cursor is orange
+            relief=tk.FLAT,               # no raised/sunken 3D border effect
+            bd=0,
+            highlightthickness=2,         # 2px colored outline around the box
+            highlightbackground=COLORS["border"],       # outline when NOT focused (gray)
+            highlightcolor=COLORS["accent_orange"],     # outline when focused (orange glow)
+        )
+        # ipady=10 adds 10px vertical internal padding, making the box taller
+        # padx=(0, 10) adds 10px gap on the RIGHT between the box and the SEND button
+        self.input_box.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=10, padx=(0, 10))
+
+        # Bind the Enter/Return key to _send_message().
+        # lambda event: absorbs the event object that .bind() always passes,
+        # since _send_message() takes no parameters.
+        self.input_box.bind("<Return>", lambda event: self._send_message())
+
+        # SEND button
+        self.send_btn = tk.Button(
+            input_frame,
+            text="SEND",
+            font=tkfont.Font(family="Consolas", size=11, weight="bold"),
+            bg=COLORS["accent_orange"],
+            fg=COLORS["bg_dark"],
+            activebackground=COLORS["accent_dim"],
+            activeforeground=COLORS["text_primary"],
+            relief=tk.FLAT,
+            bd=0,
+            padx=20,
+            pady=8,
+            cursor="hand2",
+            command=self._send_message
+        )
+        self.send_btn.pack(side=tk.RIGHT)
+
         # ── MAIN CONTENT AREA ─────────────────────────────────────────────────
         # This frame holds both the CHAT AREA and the SIDEBAR side by side.
         # expand=True means it grows to fill all vertical space not used by the
         # header (top) and input bar (bottom).
+        # NOTE: This is packed AFTER the input bar so it only fills the remaining
+        # space — it does not push the input bar off screen.
         content_frame = tk.Frame(self.root, bg=COLORS["bg_dark"])
         content_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -529,65 +597,7 @@ class ServerGUI:
             pady=10
         ).pack()
 
-        # ── INPUT BAR (bottom of the window) ──────────────────────────────────
-        # PACKING ORDER NOTE:
-        #   With side=tk.BOTTOM, the FIRST widget packed ends up at the very bottom.
-        #   So we pack input_frame first (goes to bottom), then the 1px separator
-        #   line (which ends up just above the input frame).
 
-        input_frame = tk.Frame(
-            self.root,
-            bg=COLORS["bg_medium"],
-            pady=12,   # 12px top and bottom internal padding
-            padx=15    # 15px left and right internal padding
-        )
-        input_frame.pack(fill=tk.X, side=tk.BOTTOM)
-
-        # 1px gray separator line between the chat area and the input bar
-        tk.Frame(self.root, bg=COLORS["border"], height=1).pack(fill=tk.X, side=tk.BOTTOM)
-
-        # Single-line text input field where the server admin types messages.
-        # Saved as self.input_box so _send_message() and focus_force() can access it.
-        self.input_box = tk.Entry(
-            input_frame,
-            font=self.font_input,
-            bg=COLORS["bg_light"],
-            fg=COLORS["text_primary"],
-            insertbackground=COLORS["accent_orange"],  # blinking cursor is orange
-            relief=tk.FLAT,               # no raised/sunken 3D border effect
-            bd=0,
-            highlightthickness=2,         # 2px colored outline around the box
-            highlightbackground=COLORS["border"],       # outline when NOT focused (gray)
-            highlightcolor=COLORS["accent_orange"],     # outline when focused (orange glow)
-        )
-        # ipady=10 adds 10px vertical internal padding, making the box taller
-        # padx=(0, 10) adds 10px gap on the RIGHT between the box and the SEND button
-        self.input_box.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=10, padx=(0, 10))
-
-        # Bind the Enter/Return key to _send_message().
-        # .bind("<Return>", handler) means: when Enter is pressed, call handler.
-        # lambda event: is needed because .bind() always passes an event object,
-        # but _send_message() takes no parameters. The lambda absorbs the event.
-        self.input_box.bind("<Return>", lambda event: self._send_message())
-
-        # SEND button — clicking this also calls _send_message()
-        # Saved as self.send_btn in case we need to enable/disable it later
-        self.send_btn = tk.Button(
-            input_frame,
-            text="SEND",
-            font=tkfont.Font(family="Consolas", size=11, weight="bold"),
-            bg=COLORS["accent_orange"],             # orange background
-            fg=COLORS["bg_dark"],                   # dark text on orange
-            activebackground=COLORS["accent_dim"],  # slightly darker when held down
-            activeforeground=COLORS["text_primary"],
-            relief=tk.FLAT,
-            bd=0,
-            padx=20,      # wide button — 20px padding on each side
-            pady=8,
-            cursor="hand2",              # pointer cursor when hovering
-            command=self._send_message   # function to call when clicked
-        )
-        self.send_btn.pack(side=tk.RIGHT)
 
     # ──────────────────────────────────────────────────────────
     # _append_message: Inserts a message into the chat display
