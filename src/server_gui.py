@@ -29,7 +29,7 @@ HOW THIS DIFFERS FROM server.py:
 IMPORTANT CONCEPT — THREADS AND THE GUI:
     Tkinter (the GUI library) has one strict rule:
         ALL changes to the GUI MUST happen on the MAIN thread.
-    But our networking code runs on BACKGROUND threads (so the window doesn't freeze).
+    But our networking code runs on BACKGROUND threads (so the window does not freeze).
     To safely update the GUI from a background thread, we use:
         self.root.after(0, lambda: some_gui_function())
     This schedules the GUI update to run on the main thread as soon as possible.
@@ -69,7 +69,7 @@ from tkinter import scrolledtext
 from tkinter import font as tkfont
 # This lets us create custom Font objects with specific family, size, and weight.
 # Example: tkfont.Font(family="Consolas", size=12, weight="bold")
-# Without this, we'd be limited to Tkinter's default fonts.
+# Without this, we would be limited to Tkinter's default fonts.
 
 
 # ══════════════════════════════════════════════════════════════
@@ -90,10 +90,6 @@ COLORS = {
     "bg_medium":      "#161b22",  # Slightly lighter — used for the header and sidebar
     "bg_light":       "#21262d",  # Even lighter — used for the input text box
 
-    # ── Bubble/message background colors ──
-    "bg_bubble_self": "#e8600a",  # Dark orange — background for server's own messages
-    "bg_bubble_other":"#1f2937",  # Dark gray-blue — background for client messages
-
     # ── Orange accent colors ──
     "accent_orange":  "#f97316",  # Bright orange — used for titles, buttons, highlights
     "accent_dim":     "#c2410c",  # Darker orange — used for hover states and dividers
@@ -106,7 +102,6 @@ COLORS = {
     # ── UI element colors ──
     "border":         "#30363d",  # Dark gray — thin lines separating sections
     "online_dot":     "#22c55e",  # Green — the dot next to connected client names
-    "scrollbar":      "#30363d",  # Dark gray — the scrollbar track color
 }
 
 # These 8 colors are assigned to clients in order.
@@ -127,7 +122,7 @@ USERNAME_COLORS = [
 # ══════════════════════════════════════════════════════════════
 # SECTION 3: GLOBAL STATE
 # These variables are shared and accessible from anywhere in this file,
-# including inside threads. "Global" means they're not locked inside
+# including inside threads. "Global" means they are not locked inside
 # any one function or class.
 # ══════════════════════════════════════════════════════════════
 
@@ -135,10 +130,10 @@ USERNAME_COLORS = [
 # Each entry looks like: { "socket": <socket obj>, "id": 1, "address": ("192.168.1.2", 54321) }
 connected_clients = []
 
-# A threading Lock — think of it as a "talking stick" or a bathroom key.
-# When one thread wants to read or modify connected_clients, it must "acquire" the lock first.
-# If another thread already holds the lock, the second thread WAITS until it's released.
-# This prevents two threads from modifying the list at the exact same time (which would corrupt it).
+# A threading Lock — think of it as a "talking stick".
+# When one thread wants to modify connected_clients, it must acquire the lock first.
+# If another thread already holds the lock, the second thread WAITS until it is released.
+# This prevents two threads from modifying the list at the same time (which would corrupt it).
 clients_lock = threading.Lock()
 
 # A counter that goes up by 1 each time a new client connects.
@@ -161,26 +156,22 @@ def get_timestamp():
 
     Example output: [2026-05-06 02:35:10 PM]
 
-    Why do we need this?
-        Every chat message is stamped with the exact time it was sent.
-        This is the "Timestamps" bonus feature from the project requirements.
-
     How strftime() works:
         strftime() = "string format time" — converts a datetime object into a string.
         Each % code is replaced with part of the date/time:
-            %Y = 4-digit year        → 2026
-            %m = month as 2 digits   → 05
-            %d = day as 2 digits     → 06
-            %I = hour (12-hr clock)  → 02  (use %H for 24-hour)
-            %M = minutes             → 35
-            %S = seconds             → 10
-            %p = AM or PM            → PM
+            %Y = 4-digit year        -> 2026
+            %m = month as 2 digits   -> 05
+            %d = day as 2 digits     -> 06
+            %I = hour (12-hr clock)  -> 02
+            %M = minutes             -> 35
+            %S = seconds             -> 10
+            %p = AM or PM            -> PM
 
     Returns:
         str: Formatted timestamp string like "[2026-05-06 02:35:10 PM]"
     """
-    now = datetime.datetime.now()                    # Get the current moment in time
-    return now.strftime("[%Y-%m-%d %I:%M:%S %p]")   # Format it as a readable string
+    now = datetime.datetime.now()                   # Get the current moment in time
+    return now.strftime("[%Y-%m-%d %I:%M:%S %p]")  # Format it as a readable string
 
 
 def get_username_color(client_id):
@@ -188,7 +179,7 @@ def get_username_color(client_id):
     Returns a hex color string for a given client ID.
 
     Why do we need this?
-        Each client's name is displayed in a unique color so it's easy to tell
+        Each client's name is displayed in a unique color so it is easy to tell
         who said what at a glance — similar to how Slack or Discord color usernames.
 
     How it works:
@@ -226,8 +217,8 @@ class ServerGUI:
         inside a class keeps everything organized and connected.
 
     WHAT IS "self"?
-        "self" refers to the specific instance of the class.
-        self.root      = the main window
+        "self" refers to this specific instance of the class.
+        self.root      = the main Tkinter window
         self.port      = the port number we are listening on
         self.chat_area = the scrollable text widget showing messages
         etc.
@@ -246,60 +237,85 @@ class ServerGUI:
         __init__ is the constructor — it runs automatically when we create
         a ServerGUI object. Think of it as the setup function.
 
-        It does things in this order:
-            1. Saves the port number
-            2. Creates the Tkinter window
-            3. Builds all the visual widgets (header, chat area, sidebar, input bar)
-            4. Starts the server networking in a background thread
-            5. Starts the Tkinter main loop (keeps window alive and responsive)
+        ORDER OF OPERATIONS (very important — do not rearrange):
+            1. Save the port number
+            2. Create the Tkinter window (tk.Tk())
+            3. Configure the window (title, size, colors, close handler)
+            4. Build all visual widgets (_build_ui)
+            5. Start the server socket in a background thread
+            6. Schedule focus on the input box after 100ms
+            7. Start the Tkinter main loop — this BLOCKS until window closes
 
         Parameters:
             port (int): The TCP port number this server will listen on
         """
-        # Save the port so other methods in this class can access it via self.port
+
+        # ── 1. Save the port ──────────────────────────────────────────────────
+        # We store it on self so every method in this class can access it
         self.port = port
 
-        # ── Step 1: Create the main window ────────────────────────────────────
-        # tk.Tk() creates the root (main) window. Every Tkinter app has exactly one.
+        # ── 2. Create the root window ─────────────────────────────────────────
+        # tk.Tk() creates the ONE main window for this application.
+        # Every Tkinter app must have exactly one root window.
         self.root = tk.Tk()
 
-        # Set the text that appears in the window title bar at the top
+        # ── 3. Configure the window ───────────────────────────────────────────
+
+        # Text shown in the title bar at the top of the window
         self.root.title(f"IS436 Chat Server — Port {port}")
 
-        # Set the initial window size: 900 pixels wide, 650 pixels tall
+        # Initial size: 900 pixels wide, 650 pixels tall
         self.root.geometry("900x650")
 
-        # Set a minimum size — the user cannot shrink the window smaller than this
+        # Minimum resize limit — user cannot shrink the window below this size
         self.root.minsize(700, 500)
 
-        # Set the background color of the entire window to our dark navy color
+        # Background color for the entire window
         self.root.configure(bg=COLORS["bg_dark"])
 
-        # Tell Tkinter what to do when the user clicks the X (close) button.
-        # Instead of just closing instantly, we call our on_close() method first
-        # so we can disconnect clients gracefully before shutting down.
+        # When the user clicks the X button, call our on_close() method FIRST
+        # so we can notify clients and close sockets before the program exits.
+        # Without this, closing the window would leave client connections hanging.
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # ── Step 2: Build the visual layout ───────────────────────────────────
-        # This method creates all the widgets: header, chat area, sidebar, input bar
+        # ── 4. Build all visual widgets ───────────────────────────────────────
+        # _build_ui() creates all the frames, labels, text areas, and buttons.
+        # It must run BEFORE the server thread starts, because the server thread
+        # updates the GUI and the widgets need to exist before that happens.
         self._build_ui()
 
-        # ── Step 3: Start the server socket in a background thread ────────────
+        # ── 5. Start the server networking in a background thread ─────────────
         # WHY a background thread?
-        #   The server accept() call BLOCKS — it just sits and waits for clients.
-        #   If we ran this on the main thread, the window would freeze completely.
-        #   By running it in a separate thread, the GUI stays responsive.
-        # daemon=True means: when the main window closes, kill this thread too
+        #   The server's accept() call BLOCKS — it just sits and waits for clients.
+        #   If we ran this on the main thread, the window would freeze completely
+        #   and the user could never type anything.
+        #   A background thread lets the GUI run normally at the same time.
+        #
+        # threading.Thread(target=func) creates a thread that will run func().
+        # daemon=True means: when the main window closes, kill this thread too.
+        #   Without daemon=True, the thread would keep running even after the
+        #   window closes, and the program would never fully exit.
         server_thread = threading.Thread(target=self._start_server, daemon=True)
-        server_thread.start()
+        server_thread.start()  # Launch the thread — _start_server() begins running
 
-        # ── Step 4: Start the Tkinter event loop ──────────────────────────────
+        # ── 6. Schedule focus on the input box ───────────────────────────────
+        # focus_force() moves keyboard focus to the input box so the user can
+        # start typing right away without having to click on it first.
+        # We use root.after(100, ...) to wait 100 milliseconds before doing this.
+        # Why wait? Because the window needs a moment to fully render before
+        # focus_force() will work reliably. 100ms is enough time.
+        self.root.after(100, lambda: self.input_box.focus_force())
+
+        # ── 7. Start the Tkinter main loop ────────────────────────────────────
         # mainloop() hands control to Tkinter. It:
-        #   - Keeps the window open
-        #   - Listens for user actions (clicks, key presses)
-        #   - Redraws the window when needed
-        #   - Runs forever until the window is closed
-        # Everything after this line only runs AFTER the window closes.
+        #   - Keeps the window open and visible
+        #   - Listens for user actions (mouse clicks, key presses, window resize)
+        #   - Redraws widgets whenever they change
+        #   - Processes all the self.root.after() callbacks scheduled by threads
+        #   - Runs FOREVER until the window is closed
+        #
+        # IMPORTANT: Everything after this line only runs AFTER the window closes.
+        # The program is effectively "paused" here while the window is open.
         self.root.mainloop()
 
     # ──────────────────────────────────────────────────────────
@@ -310,177 +326,181 @@ class ServerGUI:
         """
         Builds the entire visual layout of the server window.
 
-        TKINTER LAYOUT BASICS:
-            Tkinter uses a geometry manager to position widgets.
-            We use .pack() which stacks widgets in a direction.
+        TKINTER LAYOUT SYSTEM — HOW .pack() WORKS:
+            Tkinter uses a "geometry manager" to position widgets.
+            .pack() stacks widgets against the edges of their parent container.
 
-            .pack(side=tk.TOP)              -> stacks from the top down
-            .pack(side=tk.BOTTOM)           -> stacks from the bottom up
-            .pack(side=tk.LEFT)             -> stacks left to right
-            .pack(side=tk.RIGHT)            -> stacks right to left
-            .pack(fill=tk.X)                -> stretches the widget to fill horizontally
-            .pack(fill=tk.BOTH, expand=True)-> fills all available space
+            .pack(side=tk.TOP)               -> stack against the top edge
+            .pack(side=tk.BOTTOM)            -> stack against the bottom edge
+            .pack(side=tk.LEFT)              -> stack against the left edge
+            .pack(side=tk.RIGHT)             -> stack against the right edge
+            .pack(fill=tk.X)                 -> stretch to fill full width
+            .pack(fill=tk.Y)                 -> stretch to fill full height
+            .pack(fill=tk.BOTH, expand=True) -> fill all remaining space
+
+        IMPORTANT PACKING ORDER FOR side=BOTTOM:
+            When packing with side=BOTTOM, widgets stack from the bottom UP.
+            The FIRST widget packed with side=BOTTOM ends up at the very bottom.
+            So we pack the input bar first, then the separator line above it.
 
         WIDGET TYPES USED:
-            tk.Frame       -> an invisible container for grouping other widgets
-            tk.Label       -> displays text (non-editable)
-            tk.Entry       -> a single-line text input box (for typing messages)
-            tk.Button      -> a clickable button
-            ScrolledText   -> a multi-line read-only text area with a scrollbar
+            tk.Frame       -> invisible container/box for grouping other widgets
+            tk.Label       -> displays static text (user cannot edit it)
+            tk.Entry       -> single-line text input field (for typing messages)
+            tk.Button      -> clickable button
+            ScrolledText   -> multi-line read-only text area with a scrollbar
 
-        WINDOW LAYOUT:
+        FINAL LAYOUT:
             +---------------------------------+--------------+
             |           HEADER BAR            |              |
-            +---------------------------------|   SIDEBAR    |
-            |                                 |  (connected  |
-            |         CHAT AREA               |   clients)   |
-            |                                 |              |
+            +---------------------------------+   SIDEBAR    |
+            |                                 |  (who is     |
+            |         CHAT AREA               |  connected)  |
+            |    (scrollable messages)        |              |
             +---------------------------------+--------------+
             |                INPUT BAR                        |
+            |  [ type here...              ]  [  SEND  ]      |
             +-------------------------------------------------+
         """
 
         # ── FONTS ─────────────────────────────────────────────────────────────
-        # We define fonts as variables so we can reuse them without repeating ourselves.
-        # tkfont.Font() lets us specify: family (typeface), size (in points), weight (bold/normal)
-        self.font_header    = tkfont.Font(family="Consolas", size=13, weight="bold")  # Title text
-        self.font_message   = tkfont.Font(family="Consolas", size=11)                 # Chat messages
-        self.font_timestamp = tkfont.Font(family="Consolas", size=9)                  # Small timestamps
-        self.font_username  = tkfont.Font(family="Consolas", size=11, weight="bold")  # Bold usernames
-        self.font_input     = tkfont.Font(family="Consolas", size=12)                 # Input box text
-        self.font_sidebar   = tkfont.Font(family="Consolas", size=10)                 # Sidebar names
+        # Define all fonts once here so they can be reused throughout _build_ui.
+        # tkfont.Font() creates a font object with: family, size, weight
+        #   family = the typeface name (Consolas is a monospace/coding font)
+        #   size   = point size (larger number = bigger text)
+        #   weight = "bold" or "normal"
+        self.font_header    = tkfont.Font(family="Consolas", size=13, weight="bold")
+        self.font_message   = tkfont.Font(family="Consolas", size=11)
+        self.font_timestamp = tkfont.Font(family="Consolas", size=9)
+        self.font_username  = tkfont.Font(family="Consolas", size=11, weight="bold")
+        self.font_input     = tkfont.Font(family="Consolas", size=12)
+        self.font_sidebar   = tkfont.Font(family="Consolas", size=10)
 
         # ── HEADER BAR ────────────────────────────────────────────────────────
-        # tk.Frame is an invisible rectangular box used to group widgets.
-        # Here we give it a background color so it becomes a visible colored bar.
+        # tk.Frame is an invisible rectangular container.
+        # By giving it a background color, it becomes a visible colored bar.
         header_frame = tk.Frame(
-            self.root,              # Parent: this frame lives inside the root window
-            bg=COLORS["bg_medium"], # Slightly lighter than the main dark background
-            height=55               # Fixed height of 55 pixels
+            self.root,               # parent: this frame lives directly inside the root window
+            bg=COLORS["bg_medium"],  # slightly lighter than the main dark background
+            height=55                # fixed at 55 pixels tall
         )
-        # fill=tk.X   -> stretch to fill the full WIDTH of the window
-        # side=tk.TOP -> attach to the top of the window
-        header_frame.pack(fill=tk.X, side=tk.TOP)
+        header_frame.pack(fill=tk.X, side=tk.TOP)  # stretch full width, attach to top
 
-        # pack_propagate(False) prevents the frame from auto-shrinking to fit its contents.
-        # Without this, the header would collapse to zero if it had no children yet.
+        # pack_propagate(False) stops the frame from auto-shrinking to fit its children.
+        # Without this, if children are small, the header would collapse to near-zero height.
         header_frame.pack_propagate(False)
 
-        # A very thin (3px tall) orange bar placed at the absolute top edge of the window.
-        # We use .place() instead of .pack() here because we want pixel-perfect positioning.
-        # relwidth=1 means "stretch to 100% of the parent window's width"
-        accent_bar = tk.Frame(self.root, bg=COLORS["accent_orange"], height=3)
-        accent_bar.place(x=0, y=0, relwidth=1)
+        # A thin 3-pixel orange accent line at the absolute top of the window.
+        # We use .place() instead of .pack() here for pixel-perfect positioning.
+        # x=0, y=0 = top-left corner of the window
+        # relwidth=1 = stretch to 100% of the window width
+        tk.Frame(self.root, bg=COLORS["accent_orange"], height=3).place(x=0, y=0, relwidth=1)
 
         # App title label on the LEFT side of the header
-        # tk.Label displays text that the user cannot edit
+        # tk.Label displays text that the user cannot click into or edit
         tk.Label(
-            header_frame,                   # This label lives inside the header frame
-            text="IS436 CHAT SERVER",       # The text to display
-            font=self.font_header,          # Bold large font
-            bg=COLORS["bg_medium"],         # Must match the header background
-            fg=COLORS["accent_orange"],     # fg = foreground = text color (orange)
-            padx=20                         # 20px of horizontal padding inside the label
-        ).pack(side=tk.LEFT, pady=12)       # Attach to left, 12px top/bottom padding
+            header_frame,
+            text="IS436 CHAT SERVER",
+            font=self.font_header,
+            bg=COLORS["bg_medium"],      # must match the header frame's background
+            fg=COLORS["accent_orange"],  # fg = foreground = the text color
+            padx=20                      # 20px horizontal padding inside the label
+        ).pack(side=tk.LEFT, pady=12)    # attach to left, 12px top/bottom padding
 
-        # Port and status label on the RIGHT side of the header.
-        # We save it as self.port_label so we can update it later
-        # (e.g. change "WAITING..." to "2 ONLINE" when clients connect).
+        # Port + status label on the RIGHT side of the header.
+        # Saved as self.port_label so _update_client_list() can change its text later
+        # (e.g. from "WAITING..." to "2 ONLINE" when clients connect).
         self.port_label = tk.Label(
             header_frame,
             text=f"PORT {self.port}  |  WAITING...",
             font=tkfont.Font(family="Consolas", size=10),
             bg=COLORS["bg_medium"],
-            fg=COLORS["text_secondary"],    # Gray — less visually prominent
+            fg=COLORS["text_secondary"],  # gray — less visually prominent
             padx=20
         )
         self.port_label.pack(side=tk.RIGHT, pady=12)
 
         # ── MAIN CONTENT AREA ─────────────────────────────────────────────────
-        # This frame is a container that holds the chat area AND sidebar side by side.
-        # expand=True means it will grow to fill all remaining vertical space
-        # after the header and input bar take their share.
+        # This frame holds both the CHAT AREA and the SIDEBAR side by side.
+        # expand=True means it grows to fill all vertical space not used by the
+        # header (top) and input bar (bottom).
         content_frame = tk.Frame(self.root, bg=COLORS["bg_dark"])
         content_frame.pack(fill=tk.BOTH, expand=True)
 
-        # ── CHAT AREA (left side, takes most of the space) ────────────────────
+        # ── CHAT AREA (left side) ─────────────────────────────────────────────
         chat_frame = tk.Frame(content_frame, bg=COLORS["bg_dark"])
-        # expand=True + fill=tk.BOTH -> takes all space NOT used by the sidebar
+        # expand=True + fill=BOTH means this takes ALL space not used by the sidebar
         chat_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # ScrolledText is a multi-line text widget with a built-in scrollbar.
-        # state=tk.DISABLED makes it read-only so users cannot click and type in it.
-        # We temporarily set it to NORMAL when inserting new messages (see _append_message),
-        # then set it back to DISABLED so it stays read-only.
+        # ScrolledText is a text widget with a built-in scrollbar.
+        # state=tk.DISABLED = read-only. Users cannot click into it and type.
+        # We temporarily switch to NORMAL when inserting messages (see _append_message),
+        # then switch back to DISABLED to keep it read-only.
         self.chat_area = scrolledtext.ScrolledText(
             chat_frame,
-            state=tk.DISABLED,          # Read-only mode — code inserts text, not the user
-            wrap=tk.WORD,               # Wrap long lines at word boundaries, not mid-word
+            state=tk.DISABLED,           # read-only
+            wrap=tk.WORD,                # wrap long lines at word boundaries, not mid-word
             bg=COLORS["bg_dark"],
             fg=COLORS["text_primary"],
             font=self.font_message,
-            borderwidth=0,              # No visible border around the widget
-            highlightthickness=0,       # No focus highlight ring around the widget
-            padx=15,                    # 15px padding on left and right inside the text area
-            pady=15,                    # 15px padding on top and bottom inside the text area
-            spacing3=8,                 # 8px extra space AFTER each paragraph/line (visual breathing room)
+            borderwidth=0,               # no border around the widget
+            highlightthickness=0,        # no focus ring around the widget
+            padx=15,                     # 15px left and right internal padding
+            pady=15,                     # 15px top and bottom internal padding
+            spacing3=8,                  # 8px extra space after each line/paragraph
         )
         self.chat_area.pack(fill=tk.BOTH, expand=True)
 
         # ── TEXT TAGS ─────────────────────────────────────────────────────────
-        # Tags let us apply different visual styles to different pieces of text
-        # inside the same ScrolledText widget.
-        # Think of tags like CSS classes: you define the style once, then apply it by name.
+        # Tags let us style specific pieces of text inside ScrolledText.
+        # Think of them like CSS classes — define the style once, apply it by name.
         #
-        # tag_configure(name, **options) defines what a tag looks like.
-        # When inserting text, the tag name is passed as the 3rd argument:
-        #   self.chat_area.insert(tk.END, "hello", "timestamp")
-        #   This displays "hello" using the gray small-font "timestamp" style.
+        # HOW TO USE TAGS:
+        #   self.chat_area.tag_configure("tagname", foreground="#color", font=...)
+        #   defines the style.
+        #
+        #   self.chat_area.insert(tk.END, "some text", "tagname")
+        #   applies that style to "some text" when inserting it.
 
-        # Small gray text for the time shown next to each message
+        # Small gray text — used for the timestamp shown next to each message
         self.chat_area.tag_configure("timestamp",
             foreground=COLORS["text_secondary"],
             font=self.font_timestamp)
 
-        # Bold orange label for "SERVER HOST" (the server admin's name)
+        # Bold orange text — used for the "SERVER HOST" label above server messages
         self.chat_area.tag_configure("server_name",
             foreground=COLORS["accent_orange"],
             font=self.font_username)
 
-        # White text with left indent for the server's message content
+        # White indented text — used for the body of server messages
         self.chat_area.tag_configure("server_msg",
             foreground=COLORS["text_primary"],
             font=self.font_message,
-            lmargin1=20,    # Left margin for the FIRST line of a paragraph
-            lmargin2=20)    # Left margin for CONTINUATION lines (when text wraps)
+            lmargin1=20,   # left margin for the first line of a paragraph
+            lmargin2=20)   # left margin for continuation lines (when text wraps)
 
-        # Centered italic orange text for system announcements
-        # Examples: "Client #1 has joined" or "Client #2 has left"
+        # Centered italic orange text — used for system announcements
+        # Examples: "Client #1 has joined" / "Server started on port 5000"
         self.chat_area.tag_configure("system",
             foreground=COLORS["text_system"],
             font=tkfont.Font(family="Consolas", size=10, slant="italic"),
             justify=tk.CENTER)
 
-        # Subtle gray for any separator lines
-        self.chat_area.tag_configure("separator",
-            foreground=COLORS["border"])
-
-        # ── SIDEBAR (right side — shows who is connected) ──────────────────────
-        # A fixed-width panel.
-        # highlightbackground draws a thin visible border around the entire frame.
+        # ── SIDEBAR (right side — shows who is connected) ─────────────────────
+        # A fixed-width 200px panel on the right.
+        # highlightbackground + highlightthickness draws a thin visible border.
         sidebar = tk.Frame(
             content_frame,
             bg=COLORS["bg_medium"],
-            width=200,                              # Fixed width — will not resize
+            width=200,
             bd=0,
-            highlightbackground=COLORS["border"],   # Border color (thin line on left edge)
-            highlightthickness=1                    # 1px border
+            highlightbackground=COLORS["border"],
+            highlightthickness=1
         )
-        # fill=tk.Y -> stretch to fill the full HEIGHT of the content area (not width)
         sidebar.pack(side=tk.RIGHT, fill=tk.Y)
-        sidebar.pack_propagate(False)   # Lock the sidebar at exactly width=200
+        sidebar.pack_propagate(False)  # lock sidebar at exactly width=200
 
-        # "CONNECTED" heading at the top of the sidebar
+        # "CONNECTED" section heading
         tk.Label(
             sidebar,
             text="CONNECTED",
@@ -490,173 +510,175 @@ class ServerGUI:
             pady=12
         ).pack()
 
-        # A thin 1px horizontal orange divider below the heading
+        # Thin orange horizontal divider line below the heading
         tk.Frame(sidebar, bg=COLORS["accent_dim"], height=1).pack(fill=tk.X, padx=10)
 
-        # This frame will hold the list of client name rows.
-        # We save it as self.client_list_frame so _update_client_list() can
-        # clear and rebuild its contents every time someone connects or leaves.
+        # This frame holds the list of connected client rows.
+        # Saved as self.client_list_frame so _update_client_list() can
+        # clear and rebuild it whenever someone connects or disconnects.
         self.client_list_frame = tk.Frame(sidebar, bg=COLORS["bg_medium"])
         self.client_list_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
-        # Placeholder label shown when nobody is connected yet
-        self.no_clients_label = tk.Label(
+        # Placeholder label shown when nobody is connected
+        tk.Label(
             self.client_list_frame,
             text="No clients yet",
             font=tkfont.Font(family="Consolas", size=9),
             bg=COLORS["bg_medium"],
             fg=COLORS["text_secondary"],
             pady=10
-        )
-        self.no_clients_label.pack()
+        ).pack()
 
         # ── INPUT BAR (bottom of the window) ──────────────────────────────────
-        # IMPORTANT PACKING ORDER: When using side=tk.BOTTOM, the LAST widget packed
-        # ends up at the very bottom. So we pack the input_frame first (it goes to
-        # the bottom), then the 1px separator line (which ends up just above it).
+        # PACKING ORDER NOTE:
+        #   With side=tk.BOTTOM, the FIRST widget packed ends up at the very bottom.
+        #   So we pack input_frame first (goes to bottom), then the 1px separator
+        #   line (which ends up just above the input frame).
 
         input_frame = tk.Frame(
             self.root,
             bg=COLORS["bg_medium"],
-            pady=12,    # Vertical internal padding
-            padx=15     # Horizontal internal padding
+            pady=12,   # 12px top and bottom internal padding
+            padx=15    # 15px left and right internal padding
         )
         input_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         # 1px gray separator line between the chat area and the input bar
         tk.Frame(self.root, bg=COLORS["border"], height=1).pack(fill=tk.X, side=tk.BOTTOM)
 
-        # Single-line text entry box where the server admin types messages
-        # tk.Entry is the standard Tkinter single-line input field
+        # Single-line text input field where the server admin types messages.
+        # Saved as self.input_box so _send_message() and focus_force() can access it.
         self.input_box = tk.Entry(
             input_frame,
             font=self.font_input,
             bg=COLORS["bg_light"],
             fg=COLORS["text_primary"],
-            insertbackground=COLORS["accent_orange"],  # The blinking text cursor is orange
-            relief=tk.FLAT,                 # No raised/sunken 3D border effect
+            insertbackground=COLORS["accent_orange"],  # blinking cursor is orange
+            relief=tk.FLAT,               # no raised/sunken 3D border effect
             bd=0,
-            highlightthickness=2,           # Draw a colored 2px outline around the box
-            highlightbackground=COLORS["border"],      # Outline color when NOT focused (gray)
-            highlightcolor=COLORS["accent_orange"],    # Outline color when focused (orange glow)
+            highlightthickness=2,         # 2px colored outline around the box
+            highlightbackground=COLORS["border"],       # outline when NOT focused (gray)
+            highlightcolor=COLORS["accent_orange"],     # outline when focused (orange glow)
         )
-        # ipady=10 adds 10px vertical internal padding making the input taller
-        # padx=(0, 10) adds 10px gap on the RIGHT between the input and the Send button
+        # ipady=10 adds 10px vertical internal padding, making the box taller
+        # padx=(0, 10) adds 10px gap on the RIGHT between the box and the SEND button
         self.input_box.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=10, padx=(0, 10))
 
-        # Bind the Enter/Return key to call _send_message()
-        # .bind("<Return>", handler) means: when Enter is pressed, call handler
-        # lambda event: ... is needed because .bind() passes an event object,
-        # but _send_message() takes no arguments. The lambda absorbs the event param.
+        # Bind the Enter/Return key to _send_message().
+        # .bind("<Return>", handler) means: when Enter is pressed, call handler.
+        # lambda event: is needed because .bind() always passes an event object,
+        # but _send_message() takes no parameters. The lambda absorbs the event.
         self.input_box.bind("<Return>", lambda event: self._send_message())
 
-        # SEND button — orange background with dark text
-        # command=self._send_message tells Tkinter to call this function when clicked
+        # SEND button — clicking this also calls _send_message()
+        # Saved as self.send_btn in case we need to enable/disable it later
         self.send_btn = tk.Button(
             input_frame,
             text="SEND",
             font=tkfont.Font(family="Consolas", size=11, weight="bold"),
-            bg=COLORS["accent_orange"],             # Orange button background
-            fg=COLORS["bg_dark"],                   # Dark text on top of orange
-            activebackground=COLORS["accent_dim"],  # Slightly darker orange when mouse is held down
+            bg=COLORS["accent_orange"],             # orange background
+            fg=COLORS["bg_dark"],                   # dark text on orange
+            activebackground=COLORS["accent_dim"],  # slightly darker when held down
             activeforeground=COLORS["text_primary"],
             relief=tk.FLAT,
             bd=0,
-            padx=20,                # 20px horizontal padding makes the button wide
+            padx=20,      # wide button — 20px padding on each side
             pady=8,
-            cursor="hand2",         # Show a pointer (hand) cursor when hovering over the button
-            command=self._send_message
+            cursor="hand2",              # pointer cursor when hovering
+            command=self._send_message   # function to call when clicked
         )
         self.send_btn.pack(side=tk.RIGHT)
 
     # ──────────────────────────────────────────────────────────
-    # _append_message: Adds a message to the chat display
+    # _append_message: Inserts a message into the chat display
     # ──────────────────────────────────────────────────────────
 
     def _append_message(self, sender, message, msg_type="client", client_id=None):
         """
-        Inserts a new message into the scrollable chat area with styling.
+        Adds a new message to the scrollable chat area with color-coded styling.
 
-        IMPORTANT THREADING RULE:
-            This method MUST be called from the MAIN thread.
-            If calling from a background (network) thread, wrap it like this:
+        THREADING RULE — VERY IMPORTANT:
+            This method MUST only be called from the MAIN thread.
+            If you call it from a background thread, Tkinter will crash or glitch.
+            Background threads must schedule it like this:
                 self.root.after(0, lambda: self._append_message(sender, msg, ...))
-            self.root.after(0, func) schedules func to run on the main thread
-            at the very next available moment (0ms delay = as soon as possible).
+            self.root.after(0, func) = "run func on the main thread as soon as possible"
 
-        HOW WE BUILD EACH MESSAGE:
-            We insert multiple pieces of text in sequence, each with its own tag.
+        HOW EACH MESSAGE IS BUILT:
+            We insert several pieces of text in sequence, each with its own tag (style).
             Example for a client message:
-                1. Insert a blank line (spacing)
-                2. Insert "  Client #1  " with tag "client_1" (colored bold username)
-                3. Insert "[2026-05-06 02:35 PM]" with tag "timestamp" (small gray)
-                4. Insert "  Hello world" with tag "msg_1" (white indented body)
+                Insert "\n"                         (blank line for visual spacing)
+                Insert "  Client #1  "              with tag "client_1" (colored bold name)
+                Insert "[2026-05-06 02:35:10 PM]\n" with tag "timestamp" (small gray)
+                Insert "  Hello everyone!\n"        with tag "msg_1" (white indented body)
 
         Parameters:
             sender (str):     The display name shown above the message.
                               Examples: "Client #1", "SERVER HOST"
-            message (str):    The actual message content to display.
-            msg_type (str):   Controls the visual style of the message:
-                                "server"  -> orange SERVER HOST label (your own messages)
-                                "client"  -> uniquely colored username (from clients)
-                                "system"  -> centered italic orange (join/leave notices)
-            client_id (int):  The client's ID number — used to pick their username color.
+            message (str):    The actual message content to show.
+            msg_type (str):   Controls the visual style:
+                                "server"  -> orange label (server admin's own messages)
+                                "client"  -> colored label (messages from connected clients)
+                                "system"  -> centered italic (join/leave/status notices)
+            client_id (int):  The client's unique ID — used to pick their username color.
                               Only needed when msg_type="client".
         """
 
-        # Temporarily unlock the text widget so code can insert text into it.
-        # Normally it's DISABLED (read-only) so users can not click and type in it.
+        # Step 1: Temporarily unlock the text widget.
+        # Normally DISABLED (read-only) to prevent users from editing chat history.
+        # We set to NORMAL just long enough to insert the new message, then lock again.
         self.chat_area.configure(state=tk.NORMAL)
 
-        timestamp = get_timestamp()  # Current time for the timestamp label
+        timestamp = get_timestamp()  # get current date+time string
 
         if msg_type == "system":
             # System announcements — centered italic orange text
-            # Examples: "Client #2 has joined the chat!" or "Server started on port 5000"
-            # tk.END means "append to the very end of all existing text"
+            # tk.END = "insert at the very end of all existing text"
             self.chat_area.insert(tk.END, f"\n  {message}\n", "system")
 
         elif msg_type == "server":
-            # The server admin's own messages — shown with orange "SERVER HOST" label
-            self.chat_area.insert(tk.END, f"\n")                           # Blank line for spacing
-            self.chat_area.insert(tk.END, f"  {sender}  ", "server_name") # Bold orange name
-            self.chat_area.insert(tk.END, f"{timestamp}\n", "timestamp")  # Small gray timestamp
-            self.chat_area.insert(tk.END, f"  {message}\n", "server_msg") # White message body
+            # The server admin's own outgoing messages
+            self.chat_area.insert(tk.END, "\n")                             # blank spacer line
+            self.chat_area.insert(tk.END, f"  {sender}  ", "server_name")  # orange bold name
+            self.chat_area.insert(tk.END, f"{timestamp}\n", "timestamp")   # small gray time
+            self.chat_area.insert(tk.END, f"  {message}\n", "server_msg")  # white body text
 
         else:
-            # Messages received from connected clients
-            # Each client gets a unique color based on their ID
-
-            # Look up this client's assigned color (cycles through 8 colors)
+            # Messages received from a connected client
+            # Each client gets a unique color based on their ID number
             color = get_username_color(client_id) if client_id else COLORS["text_primary"]
 
-            # Create a tag for this specific client's username color.
-            # We generate the tag name dynamically: "client_1", "client_2", etc.
-            # tag_configure() either creates a new tag or updates an existing one.
+            # Dynamically create a tag for this client's username color.
+            # tag_configure creates the tag if new, or updates it if it already exists.
+            # Tag name example: "client_3" for Client #3
             tag_name = f"client_{client_id}"
             self.chat_area.tag_configure(tag_name,
                 foreground=color,
                 font=self.font_username)
 
-            # A separate tag for this client's message body
+            # A separate tag for this client's message body text
             msg_tag = f"msg_{client_id}"
             self.chat_area.tag_configure(msg_tag,
                 foreground=COLORS["text_primary"],
                 font=self.font_message,
-                lmargin1=20,    # Indent the message 20px from the left edge
-                lmargin2=20)    # Keep wrapped continuation lines indented too
+                lmargin1=20,   # indent 20px from left
+                lmargin2=20)   # keep wrapped lines indented too
 
-            self.chat_area.insert(tk.END, f"\n")                           # Blank spacer
-            self.chat_area.insert(tk.END, f"  {sender}  ", tag_name)      # Colored bold username
-            self.chat_area.insert(tk.END, f"{timestamp}\n", "timestamp")  # Gray timestamp
-            self.chat_area.insert(tk.END, f"  {message}\n", msg_tag)      # White message body
+            self.chat_area.insert(tk.END, "\n")                            # blank spacer
+            self.chat_area.insert(tk.END, f"  {sender}  ", tag_name)      # colored bold name
+            self.chat_area.insert(tk.END, f"{timestamp}\n", "timestamp")  # gray timestamp
+            self.chat_area.insert(tk.END, f"  {message}\n", msg_tag)      # white body text
 
         # Auto-scroll to the bottom so the newest message is always visible.
-        # see(tk.END) tells the widget to scroll until the last character is visible.
+        # see(tk.END) scrolls the widget until the very last character is in view.
         self.chat_area.see(tk.END)
 
-        # Re-lock the text widget — back to read-only so users can not edit the chat history
+        # Step 2: Lock the widget again — back to read-only mode.
         self.chat_area.configure(state=tk.DISABLED)
+
+        # Return focus to the input box so the admin can keep typing without
+        # having to click on the input box again after each message appears.
+        self.input_box.focus_force()
 
     # ──────────────────────────────────────────────────────────
     # _update_client_list: Refreshes the sidebar panel
@@ -666,29 +688,28 @@ class ServerGUI:
         """
         Clears and rebuilds the sidebar that shows who is currently connected.
 
-        This is called every time a client connects or disconnects so the list
-        always reflects the real-time state of the chat room.
+        Called every time a client connects or disconnects so the list always
+        reflects the real-time state of the chat room.
 
         MUST be called on the main thread (it creates and destroys GUI widgets).
         Background threads use: self.root.after(0, self._update_client_list)
 
-        How it works step by step:
-            1. Get all child widgets inside self.client_list_frame
-            2. Destroy (delete) them all to start fresh
-            3. If no clients: show the "No clients yet" placeholder
-            4. If clients exist: create one row per client (green dot + colored name)
-            5. Update the header label to show the count ("2 ONLINE" or "WAITING...")
+        Steps:
+            1. Destroy all existing widgets inside self.client_list_frame
+            2. If no clients: show "No clients yet" placeholder
+            3. If clients: create one row per client (green dot + colored name)
+            4. Update the header label ("WAITING..." or "2 ONLINE")
         """
 
-        # winfo_children() returns a list of all widgets inside the frame.
-        # We destroy() each one to wipe the panel before rebuilding it.
+        # winfo_children() returns all widgets inside the frame.
+        # We destroy() all of them to wipe the slate clean before rebuilding.
         for widget in self.client_list_frame.winfo_children():
             widget.destroy()
 
         # Use the lock when reading connected_clients to prevent threading conflicts
         with clients_lock:
             if not connected_clients:
-                # Show placeholder when nobody is connected
+                # Nobody connected — show placeholder
                 tk.Label(
                     self.client_list_frame,
                     text="No clients yet",
@@ -697,25 +718,23 @@ class ServerGUI:
                     fg=COLORS["text_secondary"],
                     pady=10
                 ).pack()
-
-                # Update the header status back to "WAITING..."
                 self.port_label.configure(text=f"PORT {self.port}  |  WAITING...")
 
             else:
-                # Create one row per connected client
+                # One or more clients — show a row for each
                 for client in connected_clients:
-                    # Each row is a small horizontal frame: [dot] [name]
+                    # Each row = a small horizontal frame containing a dot and a name
                     row = tk.Frame(self.client_list_frame, bg=COLORS["bg_medium"])
-                    row.pack(fill=tk.X, pady=3)  # pady=3 = small gap between each row
+                    row.pack(fill=tk.X, pady=3)  # 3px gap between rows
 
-                    # Green online indicator dot
+                    # Green dot indicating "online"
                     tk.Label(
                         row,
                         text="●",
                         font=tkfont.Font(family="Consolas", size=8),
                         bg=COLORS["bg_medium"],
-                        fg=COLORS["online_dot"]     # Green color for "online"
-                    ).pack(side=tk.LEFT, padx=(0, 5))   # 5px gap between dot and name
+                        fg=COLORS["online_dot"]
+                    ).pack(side=tk.LEFT, padx=(0, 5))
 
                     # Client name in their unique color
                     color = get_username_color(client["id"])
@@ -727,7 +746,7 @@ class ServerGUI:
                         fg=color
                     ).pack(side=tk.LEFT)
 
-                # Update header with current client count
+                # Update the header with the current client count
                 count = len(connected_clients)
                 self.port_label.configure(text=f"PORT {self.port}  |  {count} ONLINE")
 
@@ -737,43 +756,47 @@ class ServerGUI:
 
     def _send_message(self):
         """
-        Called when the SEND button is clicked or the Enter key is pressed.
+        Called when the SEND button is clicked OR the Enter key is pressed.
 
-        What it does step by step:
-            1. Read text from the input box and strip whitespace
-            2. Do nothing if the input is empty
-            3. Clear the input box so it's ready for the next message
-            4. Format the message with a timestamp
-            5. Display it in our own chat window immediately
-            6. Save it to the log file
-            7. Broadcast it to all connected clients over the network
+        Steps:
+            1. Read and strip text from the input box
+            2. Return early if empty (nothing to send)
+            3. Clear the input box
+            4. Display the message in our own chat window
+            5. Save it to the log file
+            6. Broadcast it to all connected clients over the network
+            7. Return focus to the input box for the next message
         """
 
-        # .get() reads the current text in the Entry widget
-        # .strip() removes any leading/trailing spaces or newline characters
+        # .get() reads the current text from the Entry widget
+        # .strip() removes any leading/trailing whitespace or accidental newlines
         message_text = self.input_box.get().strip()
 
-        # If the user just pressed Enter without typing anything, do nothing
+        # If the box is empty, do nothing — exit the function early
         if not message_text:
-            return  # return exits the function immediately (early return)
+            return
 
-        # Clear the input box after reading it
-        # .delete(0, tk.END) deletes characters from position 0 to the end
+        # Clear the input box so it's ready for the next message
+        # .delete(0, tk.END) removes all characters from position 0 to the end
         self.input_box.delete(0, tk.END)
 
-        # Build the formatted message string used for the log file and network broadcast
-        # Example output: "[2026-05-06 02:35:10 PM] [SERVER HOST]: Hello everyone!"
+        # Format the message for the log file and network broadcast
+        # Example: "[2026-05-06 02:35:10 PM] [SERVER HOST]: Hello everyone!"
         formatted = f"{get_timestamp()} [SERVER HOST]: {message_text}"
 
-        # Display it in our own chat window (no network needed for our own messages)
+        # Display the message in our own chat window immediately
+        # (no need to send it over the network to ourselves)
         self._append_message("SERVER HOST", message_text, msg_type="server")
 
-        # Save to the chat log file on disk
+        # Save to the chat log file on disk (Chat Logging bonus feature)
         self._log_message(formatted)
 
-        # Broadcast to every connected client over the network
+        # Broadcast to all connected clients
         # sender_socket=None means "send to ALL clients, skip nobody"
         self._broadcast(formatted, sender_socket=None)
+
+        # Return keyboard focus to the input box so the admin can keep typing
+        self.input_box.focus_force()
 
     # ──────────────────────────────────────────────────────────
     # _log_message: Saves a message to the log file
@@ -781,27 +804,25 @@ class ServerGUI:
 
     def _log_message(self, message):
         """
-        Appends a formatted message string to the chat log file on disk.
+        Appends a formatted message to the chat log file on disk.
 
-        This implements the "Chat Logging" bonus feature from the requirements.
-        Every message sent or received is permanently saved here so the server
-        admin can review the full conversation history even after the app closes.
+        This is the "Chat Logging" bonus feature from the project requirements.
+        Every message (sent or received) is permanently saved so the conversation
+        can be reviewed even after the app is closed.
 
-        Why append mode ("a") instead of write mode ("w")?
-            "w" (write) mode ERASES the file and starts fresh every time.
-            "a" (append) mode ADDS to the end of the file without deleting anything.
-            We always want to keep the full history, so we use append.
+        Why "a" (append) mode instead of "w" (write) mode?
+            "w" ERASES the file and starts fresh every time it's opened.
+            "a" ADDS to the end without deleting existing content.
+            We always want the full history, so we use append mode.
 
         Parameters:
             message (str): The fully formatted message string to save.
                            Example: "[2026-05-06 02:35:10 PM] Client #1: Hello!"
         """
-        # open() opens (or creates) the file.
-        # "a" = append mode (add to end, never erase)
-        # encoding="utf-8" ensures special characters like accents and emojis are handled
-        # The "with" block automatically closes the file when done — no manual f.close() needed
+        # "with" automatically closes the file when the block ends — no need for f.close()
+        # encoding="utf-8" handles accented characters, emojis, etc.
         with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(message + "\n")  # \n = newline character — puts each message on its own line
+            f.write(message + "\n")  # \n = newline, so each message is on its own line
 
     # ──────────────────────────────────────────────────────────
     # _broadcast: Sends a message to all connected clients
@@ -812,89 +833,80 @@ class ServerGUI:
         Transmits a message to every connected client over the network.
 
         WHY skip the sender?
-            When Client #1 sends a message, the server receives it and broadcasts
-            it to everyone. But Client #1 already knows what they typed — we should
-            not send their own message back to them again.
-            So we skip sender_socket when looping.
-            When sender_socket=None (server admin sent it), everyone receives it.
+            When Client #1 sends a message, we broadcast it to everyone.
+            But Client #1 already knows what they typed — no need to echo it back.
+            So we skip sender_socket when looping through clients.
+            When sender_socket=None (server admin sent it), we send to ALL clients.
 
-        HOW network sending works:
-            Sockets transmit raw bytes — not strings. So we must convert first:
-                "Hello".encode("utf-8") -> b"Hello" (bytes object)
-            UTF-8 is a character encoding that supports all languages and emoji.
+        HOW sending works:
+            Sockets transmit raw bytes, not strings.
+            We must encode the string first:
+                "Hello".encode("utf-8")  ->  b"Hello"  (bytes object)
 
         Parameters:
-            message (str):          The text message to send to all clients.
-            sender_socket (socket): The socket of the message's original sender.
-                                    This socket will be SKIPPED to avoid echoing.
-                                    Pass None to send to ALL clients (no skip).
+            message (str):          The text message to send.
+            sender_socket (socket): This socket will be SKIPPED (no echo to sender).
+                                    Pass None to send to ALL clients.
         """
-        # Convert the string to bytes — this is required for socket.send()
-        encoded = message.encode("utf-8")
+        encoded = message.encode("utf-8")  # convert string to bytes for the network
 
-        # Acquire the threading lock before iterating over connected_clients.
-        # This prevents another thread from adding/removing a client in the middle
-        # of our loop, which could cause a crash or skipped delivery.
+        # Acquire the lock before reading connected_clients.
+        # This prevents another thread from modifying the list mid-loop.
         with clients_lock:
             for client in connected_clients:
-                # Skip the socket that sent this message (no need to echo it back)
                 if client["socket"] != sender_socket:
                     try:
                         client["socket"].send(encoded)
                     except Exception:
-                        # If sending fails, the client probably disconnected suddenly.
-                        # We silently skip them — their dedicated thread will clean them up.
+                        # Sending failed — client probably disconnected suddenly.
+                        # Skip silently; their dedicated thread will clean them up.
                         pass
 
     # ──────────────────────────────────────────────────────────
-    # _handle_client: Manages one connected client (runs in its own thread)
+    # _handle_client: Manages one connected client in its own thread
     # ──────────────────────────────────────────────────────────
 
     def _handle_client(self, client_socket, client_address, client_id):
         """
-        Handles all incoming messages from a single connected client.
+        Handles all communication with a single connected client.
+        Runs in its own background thread — one copy per client.
 
-        WHY does this run in its own thread?
-            socket.recv() is a BLOCKING call — it just waits indefinitely until
-            the client sends something. If all clients shared one thread, Client #2
-            would be completely ignored while we sat waiting for Client #1 to speak.
-            By giving each client their own thread, they all get handled simultaneously.
+        WHY its own thread?
+            socket.recv() BLOCKS — it waits forever until the client sends something.
+            If all clients shared one thread, everyone would be blocked waiting for
+            just one client to speak. Each client gets their own thread so they are
+            all handled simultaneously.
 
-        LIFECYCLE (what happens in order):
-            1. Show "Client #N connected" system message in the GUI
-            2. Refresh the sidebar to add this client's name
-            3. Send a personal welcome message to this client only
-            4. Broadcast "Client #N has joined the chat!" to everyone
-            5. Loop: wait for messages, broadcast them, display them in the GUI
-            6. When the client disconnects or types "exit", clean up:
-               - Remove from connected_clients list
+        LIFECYCLE:
+            1. Display "Client #N connected" in the GUI
+            2. Refresh the sidebar to show the new client
+            3. Send a personal welcome message to just this client
+            4. Announce to the whole room that they joined
+            5. Loop: receive messages, display them, broadcast them
+            6. When they disconnect or type "exit":
+               - Remove from connected_clients
                - Close their socket
-               - Broadcast "Client #N has left the chat."
-               - Refresh the sidebar to remove their name
+               - Announce they left
+               - Refresh the sidebar
 
         Parameters:
-            client_socket (socket): The socket dedicated to this specific client.
-                                    Each client gets their own socket (not the server socket).
-            client_address (tuple): The client's IP and port, e.g. ("192.168.1.5", 54321).
-            client_id (int):        The unique ID for this client (1, 2, 3, ...).
+            client_socket (socket): The socket just for this client.
+            client_address (tuple): Their (IP address, port), e.g. ("192.168.1.5", 54321).
+            client_id (int):        Their unique number (1, 2, 3, ...).
         """
         client_name = f"Client #{client_id}"
 
-        # ── Notify the GUI that a new client connected ────────────────────────
+        # ── Notify the GUI ────────────────────────────────────────────────────
         # self.root.after(0, func) schedules func to run on the MAIN thread.
-        # We CANNOT call GUI functions directly from this background thread —
-        # Tkinter requires all GUI updates on the main thread.
-        # after(0, ...) means "schedule this for the main thread ASAP (0ms delay)"
-        # lambda: ... creates a small anonymous function to wrap the call
+        # We cannot call GUI functions directly from this thread — Tkinter requires
+        # all GUI changes on the main thread. after(0, ...) = "do this ASAP".
         self.root.after(0, lambda: self._append_message(
             "", f"{client_name} connected from {client_address[0]}", msg_type="system"
         ))
-
-        # Refresh the sidebar on the main thread to show the new client's name
         self.root.after(0, self._update_client_list)
 
-        # ── Send welcome message ONLY to this client ───────────────────────────
-        # This is a direct send to one socket — it's NOT broadcast to others
+        # ── Send welcome message to this client only ──────────────────────────
+        # This goes directly to their socket, not broadcast to everyone
         welcome = (
             f"Welcome to IS436 Chat, {client_name}!\n"
             f"  Type a message and press Enter to send.\n"
@@ -903,167 +915,144 @@ class ServerGUI:
         try:
             client_socket.send(welcome.encode("utf-8"))
         except Exception:
-            pass  # If this fails, we will catch the disconnection in the loop below
+            pass
 
-        # ── Announce to the whole room that this client joined ─────────────────
+        # ── Announce to the whole room ────────────────────────────────────────
         join_msg = f"{get_timestamp()} [SERVER] {client_name} has joined the chat!"
-        self._broadcast(join_msg)   # Send to all other clients via their sockets
-        self._log_message(join_msg) # Save to the log file
+        self._broadcast(join_msg)
+        self._log_message(join_msg)
 
-        # ── Main message receive loop for this client ─────────────────────────
-        # Runs continuously until the client disconnects or types "exit"
+        # ── Main receive loop ─────────────────────────────────────────────────
         while True:
             try:
-                # recv(1024) waits (blocks) for data from this client.
-                # 1024 = max bytes to receive at once (1 KB — more than enough for chat).
-                # This call just sits here doing nothing until the client sends something.
+                # recv(1024) waits (blocks) for up to 1024 bytes from this client.
+                # This call does nothing until the client sends something.
                 raw_data = client_socket.recv(1024)
 
-                # recv() returns empty bytes b"" when the client closes the connection
+                # Empty bytes b"" = client closed the connection
                 if not raw_data:
-                    break  # Exit the loop — client disconnected
+                    break
 
-                # Convert bytes back to a readable string
-                # .strip() removes whitespace and newline characters from both ends
+                # Decode bytes back to a string and strip whitespace
                 message_text = raw_data.decode("utf-8").strip()
 
-                # Did the client type "exit" to leave gracefully?
+                # Client typed "exit" — graceful disconnect
                 if message_text.lower() == "exit":
                     try:
-                        # Send a goodbye acknowledgment before closing
                         client_socket.send("You have disconnected. Goodbye!".encode("utf-8"))
                     except Exception:
                         pass
-                    break  # Exit the loop cleanly
+                    break
 
-                # Build the formatted message for the log and broadcast
-                # Example: "[2026-05-06 02:35:10 PM] Client #2: Hey everyone!"
+                # Format for the log and broadcast
                 formatted = f"{get_timestamp()} {client_name}: {message_text}"
                 self._log_message(formatted)
 
                 # Schedule the GUI update on the main thread.
-                # We use default argument values (m=message_text, etc.) to "capture"
-                # the current variable values in the lambda. Without this trick,
-                # by the time the lambda runs, these variables might have changed
-                # (because the loop keeps running and overwriting them).
+                # We capture current variable values as default args (m=message_text, etc.)
+                # to prevent the lambda from using stale values if the loop runs again.
                 self.root.after(0, lambda m=message_text, cid=client_id, cn=client_name:
                     self._append_message(cn, m, msg_type="client", client_id=cid)
                 )
 
-                # Broadcast to all other clients (skip this sender's socket)
+                # Broadcast to all other clients (skip this sender)
                 self._broadcast(formatted, sender_socket=client_socket)
 
             except ConnectionResetError:
-                # Windows-specific error: client closed the window without typing "exit"
+                # Windows: client closed their window without typing "exit"
                 break
-
             except Exception:
-                # Catch any other unexpected errors so the server does not crash
                 break
 
-        # ── Cleanup after this client disconnects ─────────────────────────────
+        # ── Cleanup ───────────────────────────────────────────────────────────
 
-        # Remove this client from the shared connected_clients list.
-        # List comprehension keeps all clients EXCEPT the one whose socket matches.
+        # Remove this client from the shared list
         with clients_lock:
             connected_clients[:] = [c for c in connected_clients if c["socket"] != client_socket]
 
-        # Close the socket to free the OS network resource
-        client_socket.close()
+        client_socket.close()  # free the network resource
 
-        # Notify the chat room that this person left
         leave_msg = f"{get_timestamp()} [SERVER] {client_name} has left the chat."
         self._broadcast(leave_msg)
         self._log_message(leave_msg)
 
-        # Update the GUI: show system message and refresh the sidebar
         self.root.after(0, lambda: self._append_message(
             "", f"{client_name} has left the chat.", msg_type="system"
         ))
         self.root.after(0, self._update_client_list)
 
     # ──────────────────────────────────────────────────────────
-    # _start_server: Creates the server socket and waits for connections
+    # _start_server: Creates the server socket and accepts connections
     # ──────────────────────────────────────────────────────────
 
     def _start_server(self):
         """
-        Runs in a background thread — sets up the server socket and loops
-        forever accepting new client connections.
+        Runs in a background thread.
+        Creates the server socket and loops forever accepting new clients.
 
         WHY a background thread?
-            server_socket.accept() BLOCKS until a client connects.
-            If this ran on the main thread, the entire GUI window would freeze.
-            A background thread keeps the GUI fully responsive at all times.
+            accept() BLOCKS until a client connects. Running this on the main
+            thread would freeze the GUI window completely.
 
-        HOW THE SERVER SOCKET LIFECYCLE WORKS:
-            socket()     -> create a blank socket object
-            setsockopt() -> configure: allow reuse of the port after restart
-            bind()       -> attach the socket to our IP address and port number
+        SERVER SOCKET LIFECYCLE:
+            socket()     -> create a blank socket
+            setsockopt() -> allow port reuse after restart
+            bind()       -> attach to our port number
             listen()     -> start listening (queue up to 5 pending connections)
-            accept()     -> BLOCK until a client connects, then return their socket
-            Thread()     -> hand the client socket to a dedicated handler thread
+            accept()     -> BLOCK until client connects, return their socket
+            Thread()     -> hand the client to a dedicated handler thread
             -> repeat accept() for the next client
         """
-        global client_id_counter  # We increment this global variable when clients connect
+        global client_id_counter
 
-        # ── Create and configure the server socket ────────────────────────────
-        # AF_INET     = use IPv4 addresses (the standard x.x.x.x format)
-        # SOCK_STREAM = use TCP (reliable ordered delivery — right for chat)
+        # Create the TCP server socket
+        # AF_INET = IPv4, SOCK_STREAM = TCP (reliable ordered delivery)
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        # SO_REUSEADDR = allow the port to be reused immediately after the server closes.
-        # Without this, restarting the server quickly gives "Address already in use"
-        # because the OS keeps the port reserved for ~60 seconds after the last use.
+        # SO_REUSEADDR lets us restart the server immediately after closing it.
+        # Without this, the OS holds the port reserved for ~60 seconds after shutdown.
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        # bind(("", port)) attaches this socket to our chosen port.
-        # "" = "listen on ALL network interfaces" (both 127.0.0.1 and the WiFi IP)
+        # bind(("", port)) attaches to our port on ALL network interfaces
+        # "" means "any IP address on this machine" (localhost AND WiFi)
         self.server_socket.bind(("", self.port))
 
-        # listen(5) = start accepting connections; queue up to 5 waiting connections
+        # listen(5) = begin accepting connections; queue up to 5 waiting at once
         self.server_socket.listen(5)
 
-        # ── Display startup message in the GUI ────────────────────────────────
+        # Show startup message in the chat area (scheduled on the main thread)
         self.root.after(0, lambda: self._append_message(
             "", f"Server started on port {self.port}. Waiting for clients...", msg_type="system"
         ))
 
-        # ── Main accept loop ───────────────────────────────────────────────────
+        # ── Accept loop ───────────────────────────────────────────────────────
         while True:
             try:
-                # accept() BLOCKS here until a client connects.
-                # Returns a BRAND NEW socket just for communicating with that one client,
-                # plus the client's address as a (ip, port) tuple.
-                # The original server_socket stays open to accept more clients.
+                # accept() BLOCKS until a client connects.
+                # Returns: client_socket (new socket just for this client)
+                #          client_address (their IP and port as a tuple)
                 client_socket, client_address = self.server_socket.accept()
 
-                # Give this client a unique sequential ID number
                 client_id_counter += 1
                 new_id = client_id_counter
 
-                # Add the new client to the shared list (inside a lock for safety)
                 with clients_lock:
                     connected_clients.append({
-                        "socket": client_socket,   # Used to send/receive from this client
-                        "id": new_id,              # Their unique number
-                        "address": client_address  # Their IP address and port
+                        "socket": client_socket,
+                        "id": new_id,
+                        "address": client_address
                     })
 
-                # Start a dedicated thread for this client.
-                # target = the function to run in this thread
-                # args   = arguments passed to that function (must be a tuple)
-                # daemon = True means the thread auto-closes when the main window closes
+                # Start a dedicated thread for this client
                 t = threading.Thread(
                     target=self._handle_client,
                     args=(client_socket, client_address, new_id),
                     daemon=True
                 )
-                t.start()   # Launch the thread — runs independently from this point
+                t.start()
 
             except Exception:
-                # This exception is triggered when on_close() calls self.server_socket.close()
-                # while accept() is waiting. That is our signal to stop the accept loop.
+                # server_socket was closed by on_close() — exit the loop
                 break
 
     # ──────────────────────────────────────────────────────────
@@ -1072,86 +1061,62 @@ class ServerGUI:
 
     def on_close(self):
         """
-        Called automatically when the user clicks the window's X (close) button.
+        Called automatically when the user clicks the X to close the window.
 
-        WHY do we handle this manually?
-            Without this handler, closing the window would:
-                - Leave all client TCP connections hanging open (bad)
-                - Not notify clients that the server shut down
-                - Not write a final entry to the chat log
-
-            With this handler we:
-                1. Send a shutdown notice to all connected clients
-                2. Log the shutdown
-                3. Close all client sockets cleanly
-                4. Close the server socket (also stops the accept() loop)
-                5. Destroy the Tkinter window and end the program
+        Handles graceful shutdown:
+            1. Broadcast a shutdown notice to all clients
+            2. Log the shutdown
+            3. Close all client sockets
+            4. Close the server socket (stops the accept() loop)
+            5. Destroy the Tkinter window
         """
         shutdown_msg = f"{get_timestamp()} [SERVER] Server is shutting down. Goodbye!"
-        self._broadcast(shutdown_msg)    # Notify all connected clients
-        self._log_message(shutdown_msg)  # Save to the log file
+        self._broadcast(shutdown_msg)
+        self._log_message(shutdown_msg)
 
-        # Close every client socket
         with clients_lock:
             for client in connected_clients:
                 try:
                     client["socket"].close()
                 except Exception:
-                    pass  # Already closed is fine
+                    pass
 
-        # Close the main server socket.
-        # This will cause the accept() call in _start_server to throw an exception,
-        # which breaks out of the loop and ends that background thread.
         try:
             self.server_socket.close()
         except Exception:
             pass
 
-        # Destroy the Tkinter window — this ends mainloop() and the program exits
         self.root.destroy()
 
 
 # ══════════════════════════════════════════════════════════════
 # SECTION 6: ENTRY POINT
-# This block only runs when you execute this file directly.
-# It will NOT run if this file is imported by another script.
+# Only runs when you execute: python src/server_gui.py 5000
 # ══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     """
-    sys.argv is a list of everything typed on the command line.
-
-    Example:
-        Command:      python src/server_gui.py 5000
-        sys.argv:     ["src/server_gui.py", "5000"]
-        sys.argv[0]:  "src/server_gui.py"  (the script name — we ignore this)
-        sys.argv[1]:  "5000"               (our port argument)
-
-    We expect exactly 2 items: the script name and the port number.
+    sys.argv example:
+        Command:     python src/server_gui.py 5000
+        sys.argv:    ["src/server_gui.py", "5000"]
+        sys.argv[0]: script name (ignored)
+        sys.argv[1]: our port number
     """
 
-    # Make sure the user provided exactly one argument (the port)
     if len(sys.argv) != 2:
         print("Usage:   python src/server_gui.py <port>")
         print("Example: python src/server_gui.py 5000")
-        sys.exit(1)  # Exit with code 1 — non-zero means "something went wrong"
+        sys.exit(1)
 
-    # Try converting the port argument from a string to an integer.
-    # int("5000") = 5000. int("abc") raises ValueError — we catch that below.
     try:
         port_number = int(sys.argv[1])
     except ValueError:
-        print(f"Error: '{sys.argv[1]}' is not a valid port number. Please enter an integer.")
+        print(f"Error: '{sys.argv[1]}' is not a valid port number.")
         sys.exit(1)
 
-    # Validate the port is in the allowed range (project spec says 1025-65535).
-    # Ports 0-1024 are "well-known ports" reserved for system services
-    # (HTTP=80, HTTPS=443, SSH=22) and require admin privileges to use.
     if not (1025 <= port_number <= 65535):
         print(f"Error: Port must be between 1025 and 65535. You entered: {port_number}")
         sys.exit(1)
 
-    # All checks passed — create the ServerGUI object.
-    # This triggers __init__, which builds the window, starts the server thread,
-    # and calls mainloop() which keeps the window open until the user closes it.
+    # Launch the server GUI — blocks here until the window is closed
     ServerGUI(port_number)
